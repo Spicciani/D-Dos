@@ -1,0 +1,25 @@
+[project]
+name = "ddos"
+version = "0.1.0"
+description = "D-DOS - dungeon crawl testuale multiplayer in stile DOS, giocabile su Telegram"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+ddos-play = "ddos.cli.play:main"
+ddos-bot = "ddos.bot.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ddos*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
