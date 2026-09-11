@@ -116,8 +116,22 @@ class GameService:
     async def _attribuisci(
         self, riga: db.GameRow, action: Action, telegram_id: int | None
     ) -> Action | str:
-        """Riempie `actor` dal telegram_id. Un bottone non impersona nessuno."""
-        if action.actor or telegram_id is None:
+        """Decide chi agisce. Un bottone non impersona nessuno.
+
+        Le chiamate interne senza `telegram_id` (il TICK del ticker) restano
+        fidate. Tutto quello che arriva da una persona viene attribuito al suo
+        personaggio; se la callback ne nomina uno, e' una *dichiarazione da
+        verificare*, non un'autorizzazione.
+        """
+        if telegram_id is None:
+            return action
+
+        if action.actor:
+            proprio = await self.repo.char_id_for(riga.id, telegram_id)
+            if proprio != action.actor:
+                dichiarato = riga.state.char(action.actor)
+                nome = dichiarato.name if dichiarato else "un altro personaggio"
+                return f"Questo tocca a {nome}: deve premere chi lo interpreta."
             return action
 
         if action.kind == A.JOIN:

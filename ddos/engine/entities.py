@@ -138,6 +138,8 @@ class Character:
 
     def remove_item(self, key: str, qty: int = 1) -> bool:
         """Toglie `qty` copie. False se non ce ne sono abbastanza."""
+        if qty <= 0:
+            return True  # togliere zero copie riesce sempre, anche di nulla
         have = self.inventory.get(key, 0)
         if have < qty:
             return False

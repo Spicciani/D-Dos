@@ -65,6 +65,19 @@ SEMPRE
   equip <oggetto>      cambia arma o armatura
   capo <nome>          passa il comando
   aiuto / esci
+
+CHI AGISCE
+  In combattimento gioca chi ha l'iniziativa: lo dice il prompt.
+  Fuori, il comando va da se' a chi sa farlo - "spia" al Ladro,
+  "lancia cura" al Chierico, "usa" a chi ha l'oggetto. Muoversi,
+  riposare e scendere li decide chi guida la compagnia.
+  Per scegliere tu, metti un nome davanti:
+    silfa: spia n
+    zilla: usa pozione_cura Bard
+
+INCANTESIMI
+  mago     dardo, sonno, scudo_arcano, dardi_multipli (liv. 3)
+  chierico cura, benedizione, scacciare
 """.strip()
 
 
@@ -175,24 +188,110 @@ def trova_mostro(state: GameState, testo: str):
     return None
 
 
-def attore_corrente(state: GameState):
-    """Chi agisce: in combattimento lo decide l'iniziativa, fuori chi guida."""
+# Gruppi di alias: unica fonte di verita' per la scelta dell'attore e per il
+# riconoscimento del comando, cosi' le due cose non possono divergere.
+CMD_SPIA = ("spia", "avanscoperta")
+CMD_DISINNESCA = ("disinnesca", "disarma")
+CMD_LANCIA = ("lancia", "inc")
+CMD_USA = ("usa",)
+CMD_EQUIP = ("equip", "equipaggia")
+CMD_DEL_CAPO = ("riposa", "riposo", "scendi")
+
+
+def _candidati(state: GameState) -> list:
+    """Chi puo' agire, con chi guida in testa."""
+    in_piedi = state.standing_party
+    capo = state.leader
+    if capo is not None and capo.alive:
+        return [capo] + [c for c in in_piedi if c is not capo]
+    return in_piedi
+
+
+def attore_per(state: GameState, comando: str, resto: list[str]):
+    """Chi esegue il comando, e perche' nessuno puo' farlo.
+
+    In combattimento non c'e' scelta: agisce chi ha l'iniziativa. Fuori, il
+    client sceglie chi *sa* fare quella cosa invece di attribuire tutto a chi
+    guida, altrimenti l'avanscoperta del Ladro e le cure del Chierico sarebbero
+    irraggiungibili a meno di passare il comando avanti e indietro.
+
+    Ritorna `(personaggio, motivo)`: uno dei due e' sempre vuoto.
+    """
     if state.phase is Phase.COMBATTIMENTO and state.combat:
-        return state.char(state.combat.current_id)
-    return state.leader or (state.standing_party[0] if state.standing_party else None)
+        return state.char(state.combat.current_id), ""
+
+    candidati = _candidati(state)
+    if not candidati:
+        return None, "Non c'e' nessuno in grado di agire."
+
+    if comando in DIRECTION_NAMES or comando in CMD_DEL_CAPO:
+        return candidati[0], ""
+
+    if comando in CMD_SPIA or comando in CMD_DISINNESCA:
+        ladro = next((c for c in candidati if c.cls is ClassId.LADRO), None)
+        if ladro is None:
+            return None, "Serve un Ladro in piedi: nessun altro sa farlo."
+        return ladro, ""
+
+    if comando in CMD_LANCIA and resto:
+        spell = C.SPELLS.get(resto[0].lower())
+        if spell is None:
+            return candidati[0], ""  # il nome sbagliato lo segnala il chiamante
+        lanciatore = next(
+            (c for c in candidati
+             if c.cls is spell.cls and c.level >= spell.min_level and c.spell_slots > 0),
+            None,
+        )
+        if lanciatore is None:
+            classe = C.CLASSES[spell.cls].name
+            return None, (f"Nessuno puo' lanciare {spell.name}: serve un {classe} "
+                          f"in piedi con uno slot libero.")
+        return lanciatore, ""
+
+    if (comando in CMD_USA or comando in CMD_EQUIP) and resto:
+        chiave = resto[0].lower()
+        portatore = next((c for c in candidati if chiave in c.inventory), None)
+        if portatore is None:
+            nome = C.ITEMS[chiave].name if chiave in C.ITEMS else chiave
+            return None, f"Nessuno ha {nome} nello zaino."
+        return portatore, ""
+
+    return candidati[0], ""
+
+
+def _prefisso_attore(state: GameState, riga: str, console: Console):
+    """Riconosce `nome: comando`. Ritorna `(personaggio, riga ripulita)`."""
+    testa = riga.split(" ", 1)[0]
+    if ":" not in testa:
+        return None, riga
+    prefisso, _, coda = riga.partition(":")
+    scelto = trova_personaggio(state, prefisso)
+    if scelto is None:
+        console.error(f"Non c'e' nessuno che si chiami '{prefisso.strip()}'.")
+        return None, ""
+    return scelto, coda.strip()
 
 
 def costruisci_azione(state: GameState, riga: str, console: Console) -> Action | None:
     """Traduce una riga di comando in un'azione. None = comando locale, gia' gestito."""
+    forzato, riga = _prefisso_attore(state, riga, console)
+    if not riga:
+        if forzato is not None:
+            console.error(f"E {forzato.name} cosa dovrebbe fare?")
+        return None
+
     parti = riga.split()
     comando = parti[0].lower()
     resto = parti[1:]
-    attore = attore_corrente(state)
-    if attore is None:
-        console.error("Non c'e' nessuno in grado di agire.")
-        return None
-    aid = attore.id
 
+    attore, motivo = attore_per(state, comando, resto)
+    if forzato is not None:
+        if state.phase is Phase.COMBATTIMENTO:
+            console.error("In combattimento l'ordine di iniziativa non si scavalca.")
+            return None
+        attore, motivo = forzato, ""
+
+    # I comandi che non toccano lo stato si leggono anche a compagnia a terra.
     if comando in ("aiuto", "help", "?"):
         print(AIUTO)
         return None
@@ -200,31 +299,40 @@ def costruisci_azione(state: GameState, riga: str, console: Console) -> Action |
         console.lines(map_view(state), "dim")
         return None
     if comando == "scheda":
-        bersaglio = trova_personaggio(state, " ".join(resto)) or attore
+        bersaglio = (trova_personaggio(state, " ".join(resto)) or attore
+                     or (state.party[0] if state.party else None))
+        if bersaglio is None:
+            console.error("Nessuna scheda da mostrare.")
+            return None
         console.lines(sheet_view(bersaglio))
         return None
     if comando in ("esci", "quit", "q"):
         raise SystemExit(0)
 
+    if attore is None:
+        console.error(motivo or "Non c'e' nessuno in grado di agire.")
+        return None
+    aid = attore.id
+
     if comando in DIRECTION_NAMES:
-        return Action(A.MOVE, state.leader_id or aid, value=comando)
+        return Action(A.MOVE, aid, value=comando)
     if comando in ("cerca", "perlustra"):
         return Action(A.SEARCH, aid)
-    if comando in ("spia", "avanscoperta"):
+    if comando in CMD_SPIA:
         if not resto or resto[0].lower() not in DIRECTION_NAMES:
             console.error("Serve una direzione: spia n|s|e|o")
             return None
         return Action(A.SCOUT, aid, value=resto[0].lower())
-    if comando in ("disinnesca", "disarma"):
+    if comando in CMD_DISINNESCA:
         return Action(A.DISARM, aid)
     if comando in ("prendi", "raccogli"):
         return Action(A.TAKE, aid)
     if comando == "prega":
         return Action(A.PRAY, aid)
     if comando in ("riposa", "riposo"):
-        return Action(A.REST, state.leader_id or aid)
+        return Action(A.REST, aid)
     if comando == "scendi":
-        return Action(A.DESCEND, state.leader_id or aid)
+        return Action(A.DESCEND, aid)
 
     if comando in ("a", "attacca", "att"):
         mostro = trova_mostro(state, resto[0] if resto else "")
@@ -247,10 +355,9 @@ def costruisci_azione(state: GameState, riga: str, console: Console) -> Action |
     if comando in ("fuggi", "ritirata"):
         return Action(A.FLEE, aid)
 
-    if comando in ("lancia", "inc"):
+    if comando in CMD_LANCIA:
         if not resto:
-            disponibili = ", ".join(s.key for s in C.spells_for(attore.cls, attore.level))
-            console.error(f"Quale incantesimo? ({disponibili or 'nessuno'})")
+            console.error(f"Quale incantesimo? ({_incantesimi_disponibili(state, attore)})")
             return None
         chiave = resto[0].lower()
         spell = C.SPELLS.get(chiave)
@@ -268,14 +375,14 @@ def costruisci_azione(state: GameState, riga: str, console: Console) -> Action |
             bersaglio = ""
         return Action(A.CAST, aid, bersaglio, chiave)
 
-    if comando == "usa":
+    if comando in CMD_USA:
         if not resto:
             console.error("Quale oggetto?")
             return None
         chiave = resto[0].lower()
         alleato = trova_personaggio(state, " ".join(resto[1:])) or attore
         return Action(A.USE, aid, alleato.id, chiave)
-    if comando in ("equip", "equipaggia"):
+    if comando in CMD_EQUIP:
         if not resto:
             console.error("Quale oggetto?")
             return None
@@ -291,13 +398,26 @@ def costruisci_azione(state: GameState, riga: str, console: Console) -> Action |
     return None
 
 
+def _incantesimi_disponibili(state: GameState, attore) -> str:
+    """Cosa puo' lanciare la compagnia adesso, non solo chi ha in mano il turno."""
+    if state.phase is Phase.COMBATTIMENTO and attore is not None:
+        chiavi = [s.key for s in C.spells_for(attore.cls, attore.level)]
+    else:
+        chiavi = []
+        for ch in _candidati(state):
+            if ch.spell_slots <= 0:
+                continue
+            chiavi += [s.key for s in C.spells_for(ch.cls, ch.level) if s.key not in chiavi]
+    return ", ".join(chiavi) or "nessuno"
+
+
 # --------------------------------------------------------------------------
 # Ciclo di gioco
 # --------------------------------------------------------------------------
 
 
 def prompt_label(state: GameState) -> str:
-    attore = attore_corrente(state)
+    attore, _ = attore_per(state, "", [])
     nome = attore.name if attore else "?"
     if state.phase is Phase.COMBATTIMENTO and state.combat:
         return f"[R{state.combat.round} {nome}]> "

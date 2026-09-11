@@ -7,8 +7,11 @@ Due famiglie di callback:
   * `m:<turno>:<voce>` apre solo un sottomenu. Non tocca lo stato, non consuma
     dadi, non ha bisogno del lock.
 
-Il campo `attore` resta vuoto nei bottoni: chi agisce lo decide il server dal
-telegram_id di chi ha premuto. Un bottone non puo' impersonare nessuno.
+Il campo `attore` resta vuoto nei bottoni di uso comune: chi agisce lo decide il
+server dal telegram_id di chi ha premuto. Dove il bottone e' di un personaggio
+preciso (le cure fuori dal combattimento) il campo viene riempito, ma il server
+lo *verifica* invece di fidarsene. In nessuno dei due casi un bottone puo'
+impersonare qualcuno.
 """
 
 from __future__ import annotations
@@ -27,8 +30,15 @@ Markup = InlineKeyboardMarkup
 DIR_ICON = {"n": "N", "s": "S", "e": "E", "o": "O"}
 
 
-def act(seq: int, kind: str, target: str = "", value: str = "") -> str:
-    return f"a:{seq}:{kind}||{target}|{value}"
+def act(seq: int, kind: str, target: str = "", value: str = "", owner: str = "") -> str:
+    """`owner` dichiara di quale personaggio e' il bottone.
+
+    Non e' una scorciatoia per impersonarlo: il server verifica che chi preme
+    controlli davvero quel personaggio, e rifiuta altrimenti. Serve ai menu
+    fuori dal combattimento, dove la tastiera e' una sola per tutti e un
+    bottone etichettato "Cura Ferite (Bard)" deve essere premuto da Bard.
+    """
+    return f"a:{seq}:{kind}|{owner}|{target}|{value}"
 
 
 def menu(seq: int, voce: str) -> str:
@@ -149,7 +159,8 @@ def _bersagli_mostri(state: GameState, kind: str, value: str = "") -> list[list[
     return righe
 
 
-def _bersagli_alleati(state: GameState, kind: str, value: str = "") -> list[list[Button]]:
+def _bersagli_alleati(state: GameState, kind: str, value: str = "",
+                      owner: str = "") -> list[list[Button]]:
     righe, corrente = [], []
     for c in state.party:
         if c.status is Status.MORTO:
@@ -157,7 +168,7 @@ def _bersagli_alleati(state: GameState, kind: str, value: str = "") -> list[list
         etichetta = c.name if c.alive else f"{c.name} (a terra)"
         corrente.append(Button(
             text=etichetta,
-            callback_data=act(state.turn_seq, kind, target=c.id, value=value),
+            callback_data=act(state.turn_seq, kind, target=c.id, value=value, owner=owner),
         ))
         if len(corrente) == 2:
             righe.append(corrente)
@@ -257,16 +268,23 @@ def scene_kb(state: GameState, *, menu_aperto: str = "") -> Markup | None:
 
 
 def _fuori_combattimento_kb(state: GameState, menu_aperto: str) -> Markup:
-    """Curarsi e bere pozioni tra uno scontro e l'altro: meta' del gioco."""
+    """Curarsi e bere pozioni tra uno scontro e l'altro: meta' del gioco.
+
+    Qui la tastiera e' condivisa da tutto il party, quindi ogni voce porta con
+    se' il personaggio a cui appartiene: il bottone dice "Cura Ferite (Bard)" e
+    il server pretende che a premerlo sia chi interpreta Bard.
+    """
     seq = state.turn_seq
     indietro = [Button(text="< indietro", callback_data=menu(seq, "principale"))]
 
     if menu_aperto.startswith("inc:"):
-        chiave = menu_aperto.split(":", 1)[1]
-        return Markup(inline_keyboard=_bersagli_alleati(state, A.CAST, chiave) + [indietro])
+        chiave, proprietario = _voce_con_proprietario(menu_aperto)
+        return Markup(inline_keyboard=_bersagli_alleati(
+            state, A.CAST, chiave, owner=proprietario) + [indietro])
     if menu_aperto.startswith("zaino:"):
-        chiave = menu_aperto.split(":", 1)[1]
-        return Markup(inline_keyboard=_bersagli_alleati(state, A.USE, chiave) + [indietro])
+        chiave, proprietario = _voce_con_proprietario(menu_aperto)
+        return Markup(inline_keyboard=_bersagli_alleati(
+            state, A.USE, chiave, owner=proprietario) + [indietro])
 
     if menu_aperto == "inc":
         visti: set[str] = set()
@@ -279,7 +297,7 @@ def _fuori_combattimento_kb(state: GameState, menu_aperto: str) -> Markup:
                     continue
                 visti.add(s.key)
                 righe.append([Button(text=f"{s.name} ({ch.name})",
-                                     callback_data=menu(seq, f"inc:{s.key}"))])
+                                     callback_data=menu(seq, f"inc:{s.key}:{ch.id}"))])
         return Markup(inline_keyboard=(righe or [[Button(
             text="Nessun incantesimo di supporto",
             callback_data=menu(seq, "principale"))]]) + [indietro])
@@ -290,7 +308,13 @@ def _fuori_combattimento_kb(state: GameState, menu_aperto: str) -> Markup:
         for k in sorted(ch.inventory):
             if C.item(k).kind == "pozione" and k not in visti:
                 visti.add(k)
-                righe.append([Button(text=C.item(k).name,
-                                     callback_data=menu(seq, f"zaino:{k}"))])
+                righe.append([Button(text=f"{C.item(k).name} ({ch.name})",
+                                     callback_data=menu(seq, f"zaino:{k}:{ch.id}"))])
     return Markup(inline_keyboard=(righe or [[Button(
         text="Niente pozioni", callback_data=menu(seq, "principale"))]]) + [indietro])
+
+
+def _voce_con_proprietario(menu_aperto: str) -> tuple[str, str]:
+    """`"inc:cura:p4"` -> `("cura", "p4")`. Senza proprietario, stringa vuota."""
+    parti = menu_aperto.split(":")
+    return parti[1], parti[2] if len(parti) > 2 else ""

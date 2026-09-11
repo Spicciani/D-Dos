@@ -49,8 +49,18 @@ python -m ddos.cli.play --seed ORCUS-4471      # stesso sotterraneo, sempre
 python -m ddos.cli.play                        # crea la compagnia a mano
 ```
 
-Scrivi `aiuto` al prompt per i comandi. In combattimento si gioca hot-seat:
-la tastiera passa a chi ha l'iniziativa.
+Scrivi `aiuto` al prompt per i comandi. In combattimento si gioca hot-seat: la
+tastiera passa a chi ha l'iniziativa, e lo dice il prompt (`[R1 Silfa]>`).
+
+Fuori dal combattimento il comando va da sé a chi sa eseguirlo — `spia` al
+Ladro, `lancia cura` al Chierico, `usa` a chi ha l'oggetto nello zaino — mentre
+muoversi, riposare e scendere restano decisioni di chi guida la compagnia. Per
+scegliere a mano, un nome davanti:
+
+```
+silfa: spia n
+zilla: usa pozione_cura Bard
+```
 
 ## Il bot Telegram
 
@@ -89,6 +99,10 @@ del Ladro arrivano di là.
 - **Segreti in privato.** Quando il Ladro va in avanscoperta, quello che vede
   arriva solo a lui. È la cosa che fa sembrare vero il gioco di ruolo: uno del
   gruppo sa qualcosa che gli altri non sanno.
+- **I bottoni non mentono e non impersonano.** Una callback può dichiarare di
+  quale personaggio è (`Cura Ferite (Bard)`), ma il server *verifica* che a
+  premerla sia chi interpreta Bard invece di fidarsi: nessuno può bruciare gli
+  slot di un altro.
 - **Semi condivisibili.** Ogni run ha un seme (`KORVAX-4471`). Due gruppi che
   usano lo stesso seme scendono nello stesso identico sotterraneo e possono
   confrontarsi. Viene gratis dal fatto che il motore è deterministico.
@@ -174,7 +188,7 @@ su stringhe inventate.
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest                      # 259 test, ~10 secondi
+python -m pytest                      # 284 test, ~10 secondi
 python -m ddos.cli.bench --partite 40 # misura la difficoltà
 ```
 
@@ -184,7 +198,10 @@ I test che contano davvero:
   Ha già trovato un contatore di morte che sforava e una partita che si
   bloccava per sempre.
 - `test_bot.py` usa un finto Telegram per verificare il doppio tap, la
-  tastiera scaduta, e che un segreto non finisca mai nel gruppo.
+  tastiera scaduta, che un segreto non finisca mai nel gruppo, e che nessuno
+  possa agire col personaggio di un altro.
+- `test_cli.py` verifica che fuori dal combattimento agisca chi sa fare quella
+  cosa, non chi guida la compagnia.
 - `test_render.py` verifica le 32 colonne su stati di gioco reali.
 
 `ddos.cli.bench` gioca partite intere senza nessuno alla tastiera. Il bot non

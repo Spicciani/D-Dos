@@ -143,6 +143,13 @@ def test_scacciare_ignora_i_vivi(roller):
     assert any(e.kind == "info" for e in events)
 
 
+def test_togliere_zero_oggetti_non_esplode(guerriero):
+    """Simmetrico ad add_item, che gia' ignorava le quantita' non positive."""
+    assert guerriero.remove_item("gemma", 0) is True
+    assert guerriero.remove_item("gemma", -1) is True
+    assert "gemma" not in guerriero.inventory
+
+
 def test_equipaggiare_scambia_e_rimette_in_zaino(guerriero):
     guerriero.add_item("pugnale")
     vecchia = guerriero.weapon

@@ -395,7 +395,8 @@ def test_le_callback_stanno_nei_64_byte(ambiente):
             riga = await repo.active_game(CHAT)
             if riga.state.over:
                 break
-            for menu_aperto in ("", "inc", "zaino", "pod", "spia", "inc:cura"):
+            for menu_aperto in ("", "inc", "zaino", "pod", "spia", "inc:cura",
+                                "inc:cura:p4", "zaino:pozione_cura:p1"):
                 markup = KB.scene_kb(riga.state, menu_aperto=menu_aperto)
                 if markup is None:
                     continue
@@ -467,5 +468,125 @@ def test_il_riavvio_a_meta_combattimento_riprende_dal_database(tmp_path):
             telegram_id=telegram_di_turno, expected_seq=ripresa.state.turn_seq)
         assert esito.ok, esito.avviso
         assert secondo_bot.inviati or secondo_bot.modifiche, "la scena non e' stata ridisegnata"
+
+    asyncio.run(scenario())
+
+
+# --- di chi e' il bottone --------------------------------------------------
+
+
+def _menu_cure(state):
+    """Percorre il menu delle cure fuori dal combattimento fino ai bersagli."""
+    voci = KB.scene_kb(state, menu_aperto="inc").inline_keyboard
+    cura = next((b for fila in voci for b in fila if "Cura Ferite" in b.text), None)
+    if cura is None:
+        return None, []
+    _, _, voce = KB.parse_callback(cura.callback_data)
+    bersagli = KB.scene_kb(state, menu_aperto=voce).inline_keyboard
+    return cura, [b for fila in bersagli for b in fila if b.text != "< indietro"]
+
+
+def test_il_bottone_dichiara_chi_lancia(ambiente):
+    """L'etichetta dice '(Dani)': la callback deve nominare quel personaggio,
+    altrimenti il bottone promette una cosa e ne fa un'altra."""
+    bot, repo, service = ambiente
+
+    async def scenario():
+        await _compagnia(service, repo)
+        await service.apply(CHAT, Action(A.BEGIN), telegram_id=UTENTI["marco"])
+        riga = await repo.active_game(CHAT)
+        if riga.state.phase is not Phase.ESPLORAZIONE:
+            pytest.skip("il seme parte in combattimento")
+
+        chierico = next(c for c in riga.state.party if str(c.cls) == "chierico")
+        cura, bersagli = _menu_cure(riga.state)
+        assert cura is not None, "il menu non offre le cure"
+        assert chierico.name in cura.text
+        for bottone in bersagli:
+            azione = Action.decode(KB.parse_callback(bottone.callback_data)[2])
+            assert azione.actor == chierico.id, "il bottone non dice di chi e'"
+
+    asyncio.run(scenario())
+
+
+def test_non_si_lancia_con_il_personaggio_di_un_altro(ambiente):
+    bot, repo, service = ambiente
+
+    async def scenario():
+        await _compagnia(service, repo)
+        await service.apply(CHAT, Action(A.BEGIN), telegram_id=UTENTI["marco"])
+        riga = await repo.active_game(CHAT)
+        if riga.state.phase is not Phase.ESPLORAZIONE:
+            pytest.skip("il seme parte in combattimento")
+
+        chierico = next(c for c in riga.state.party if str(c.cls) == "chierico")
+        chierico_tg = await repo.telegram_id_for(riga.id, chierico.id)
+        intruso = next(tg for tg in UTENTI.values() if tg != chierico_tg)
+        prima = riga.state.turn_seq
+        slot_prima = chierico.spell_slots
+
+        esito = await service.apply(
+            CHAT, Action(A.CAST, actor=chierico.id, target=chierico.id, value="cura"),
+            telegram_id=intruso, expected_seq=prima)
+
+        assert not esito.ok
+        assert chierico.name in esito.avviso
+        dopo = await repo.active_game(CHAT)
+        assert dopo.state.turn_seq == prima, "lo stato e' cambiato comunque"
+        assert dopo.state.char(chierico.id).spell_slots == slot_prima, \
+            "gli slot di un altro sono stati bruciati"
+
+    asyncio.run(scenario())
+
+
+def test_con_il_proprio_personaggio_si_lancia(ambiente):
+    bot, repo, service = ambiente
+
+    async def scenario():
+        await _compagnia(service, repo)
+        await service.apply(CHAT, Action(A.BEGIN), telegram_id=UTENTI["marco"])
+        riga = await repo.active_game(CHAT)
+        if riga.state.phase is not Phase.ESPLORAZIONE:
+            pytest.skip("il seme parte in combattimento")
+
+        chierico = next(c for c in riga.state.party if str(c.cls) == "chierico")
+        chierico_tg = await repo.telegram_id_for(riga.id, chierico.id)
+        ferito = riga.state.party[0]
+        ferito.hp = 1
+        await repo.save(riga.state, expected_turn_seq=riga.state.turn_seq)
+        riga = await repo.active_game(CHAT)
+
+        esito = await service.apply(
+            CHAT, Action(A.CAST, actor=chierico.id, target=ferito.id, value="cura"),
+            telegram_id=chierico_tg, expected_seq=riga.state.turn_seq)
+
+        assert esito.ok, esito.avviso
+        dopo = await repo.active_game(CHAT)
+        assert dopo.state.char(ferito.id).hp > 1
+        assert dopo.state.char(chierico.id).spell_slots == chierico.spell_slots - 1
+
+    asyncio.run(scenario())
+
+
+def test_il_ticker_resta_fidato(ambiente):
+    """Il TICK arriva dal ticker, non da una persona: nessun telegram_id da
+    verificare, e deve continuare a passare."""
+    bot, repo, service = ambiente
+
+    async def scenario():
+        await _compagnia(service, repo)
+        await service.apply(CHAT, Action(A.BEGIN), telegram_id=UTENTI["marco"])
+        for _ in range(60):
+            riga = await repo.active_game(CHAT)
+            if riga.state.phase is Phase.COMBATTIMENTO or riga.state.over:
+                break
+            await service.apply(CHAT, Action(A.MOVE, value=sorted(riga.state.room.exits)[0]),
+                                telegram_id=UTENTI["marco"])
+        riga = await repo.active_game(CHAT)
+        if riga.state.phase is not Phase.COMBATTIMENTO:
+            pytest.skip("nessun combattimento con questo seme")
+
+        esito = await service.apply(CHAT, Action(A.TICK, actor="__timeout__"))
+        assert esito.ok, esito.avviso
 
     asyncio.run(scenario())
