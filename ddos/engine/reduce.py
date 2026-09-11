@@ -50,6 +50,13 @@ def _dispatch(state: GameState, action: A.Action, roller: Roller) -> list[Event]
     if state.over:
         raise InvalidAction("La partita e' finita.")
 
+    # Rete di sicurezza: se non c'e' piu' nessuno in piedi la spedizione e'
+    # finita, qualunque azione arrivi. Senza questo controllo una compagnia
+    # sterminata fuori dal combattimento resterebbe bloccata per sempre,
+    # perche' ogni azione verrebbe rifiutata e nessuna chiuderebbe la partita.
+    if state.phase is not Phase.LOBBY and not state.standing_party:
+        return _check_wipe(state)
+
     if state.phase is Phase.LOBBY:
         if action.kind not in A.LOBBY_ACTIONS:
             raise InvalidAction("La partita non e' ancora cominciata.")
