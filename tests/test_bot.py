@@ -416,3 +416,56 @@ def test_le_callback_stanno_nei_64_byte(ambiente):
         return await repo.telegram_id_for(riga.id, riga.state.combat.current_id)
 
     asyncio.run(scenario())
+
+
+# --- riavvio ---------------------------------------------------------------
+
+
+def test_il_riavvio_a_meta_combattimento_riprende_dal_database(tmp_path):
+    """Il bot non tiene niente in memoria: un processo nuovo, sullo stesso
+    database, deve trovare il combattimento esattamente dov'era."""
+
+    async def scenario():
+        percorso = tmp_path / "riavvio.db"
+        repo = Repo(percorso)
+        await repo.setup()
+        primo_bot = BotFinto()
+        primo = GameService(primo_bot, repo)
+
+        await _compagnia(primo, repo)
+        await primo.apply(CHAT, Action(A.BEGIN), telegram_id=UTENTI["marco"])
+
+        for _ in range(60):
+            riga = await repo.active_game(CHAT)
+            if riga.state.phase is Phase.COMBATTIMENTO or riga.state.over:
+                break
+            direzione = sorted(riga.state.room.exits)[0]
+            await primo.apply(CHAT, Action(A.MOVE, value=direzione),
+                              telegram_id=UTENTI["marco"])
+        riga = await repo.active_game(CHAT)
+        if riga.state.phase is not Phase.COMBATTIMENTO:
+            pytest.skip("nessun combattimento con questo seme")
+
+        istantanea = riga.state.to_dict()
+        di_turno = riga.state.combat.current_id
+        mostri = [(m.id, m.hp) for m in riga.state.live_monsters]
+
+        # --- il processo muore qui: nuovo repo, nuovo bot, nuovo servizio ---
+        repo_nuovo = Repo(percorso)
+        secondo_bot = BotFinto()
+        secondo = GameService(secondo_bot, repo_nuovo)
+
+        ripresa = await repo_nuovo.active_game(CHAT)
+        assert ripresa.state.to_dict() == istantanea, "lo stato non e' sopravvissuto"
+        assert ripresa.state.combat.current_id == di_turno, "il turno e' saltato"
+        assert [(m.id, m.hp) for m in ripresa.state.live_monsters] == mostri
+
+        # e il combattimento va avanti normalmente
+        telegram_di_turno = await repo_nuovo.telegram_id_for(ripresa.id, di_turno)
+        esito = await secondo.apply(
+            CHAT, Action(A.ATTACK, target=ripresa.state.live_monsters[0].id),
+            telegram_id=telegram_di_turno, expected_seq=ripresa.state.turn_seq)
+        assert esito.ok, esito.avviso
+        assert secondo_bot.inviati or secondo_bot.modifiche, "la scena non e' stata ridisegnata"
+
+    asyncio.run(scenario())
