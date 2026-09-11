@@ -74,9 +74,3 @@ def test_best_of_tiene_i_migliori():
     assert len(dice) == 4
     assert total == sum(sorted(dice, reverse=True)[:3])
 
-
-def test_shuffled_non_modifica_l_originale():
-    original = list(range(10))
-    shuffled = Roller("SEME").shuffled(original)
-    assert original == list(range(10))
-    assert sorted(shuffled) == original

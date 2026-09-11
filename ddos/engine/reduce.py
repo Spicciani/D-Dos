@@ -15,7 +15,7 @@ from ddos.engine import actions as A
 from ddos.engine import content as C
 from ddos.engine import rules as R
 from ddos.engine.dice import Roller
-from ddos.engine.dungeon import DIRECTION_NAMES, Level, RoomKind, generate_level
+from ddos.engine.dungeon import DIRECTION_NAMES, RoomKind, generate_level
 from ddos.engine.entities import Ability, Character, ClassId, Condition, Monster, Status
 from ddos.engine.events import Event, ev
 from ddos.engine.state import MAX_TIER, PARTY_MAX, Combat, GameState, Phase
@@ -492,12 +492,27 @@ def _tick_dying(state: GameState, roller: Roller) -> list[Event]:
 
 
 def _check_wipe(state: GameState) -> list[Event]:
+    """Fine della spedizione quando non resta nessuno in piedi.
+
+    Chi era in agonia muore: non c'e' piu' nessuno che possa rialzarlo, e un
+    cimitero che non registra le disfatte non serve a niente.
+    """
     if state.standing_party:
         return []
-    if any(c.status is Status.MORENTE for c in state.party):
-        state.phase = Phase.SCONFITTA
-        return [ev("fine", "Nessuno e' piu' in piedi. Il buio si richiude sulla compagnia.")]
+
     state.phase = Phase.SCONFITTA
+    agonizzanti = [c for c in state.party if c.status is Status.MORENTE]
+    for caduto in agonizzanti:
+        caduto.status = Status.MORTO
+        caduto.hp = 0
+
+    if agonizzanti:
+        nomi = ", ".join(c.name for c in agonizzanti)
+        return [
+            ev("fine", "Nessuno e' piu' in piedi. Il buio si richiude sulla compagnia."),
+            ev("morte", f"Si spengono senza che nessuno possa aiutarli: {nomi}.",
+               caduti=[c.id for c in agonizzanti]),
+        ]
     return [ev("fine", "L'intera compagnia e' caduta. Il sotterraneo vi tiene.")]
 
 

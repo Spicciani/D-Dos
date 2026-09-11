@@ -13,6 +13,7 @@ dev = ["pytest>=8.0"]
 [project.scripts]
 ddos-play = "ddos.cli.play:main"
 ddos-bot = "ddos.bot.main:main"
+ddos-bench = "ddos.cli.bench:main"
 
 [build-system]
 requires = ["setuptools>=68"]

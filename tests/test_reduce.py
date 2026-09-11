@@ -6,7 +6,6 @@ import pytest
 
 from ddos.engine import actions as A
 from ddos.engine.actions import Action
-from ddos.engine.dungeon import RoomKind
 from ddos.engine.entities import ClassId, Condition, Status
 from ddos.engine.reduce import reduce
 from ddos.engine.state import GameState, Phase, new_game
@@ -311,6 +310,30 @@ def test_party_annientato_e_sconfitta():
         c.status = Status.MORENTE
     st, evs = reduce(st, Action(A.TICK))
     assert st.phase is Phase.SCONFITTA
+
+
+def test_chi_era_in_agonia_muore_con_la_compagnia():
+    """Senza nessuno in piedi non c'e' piu' nessuno che possa rialzarli:
+    devono finire nel cimitero, altrimenti il cimitero non registra le disfatte."""
+    st = trova_combattimento()
+    for c in st.party:
+        c.hp = 0
+        c.status = Status.MORENTE
+    st, evs = reduce(st, Action(A.TICK))
+    assert all(c.dead for c in st.party)
+    assert any(e.kind == "morte" for e in evs)
+
+
+def test_una_compagnia_a_terra_non_blocca_la_partita():
+    """Fuori dal combattimento nessuno puo' agire: la partita deve chiudersi
+    da sola invece di rifiutare ogni azione all'infinito."""
+    st = partita("BLOCCO")
+    for c in st.party:
+        c.hp = 0
+        c.status = Status.MORENTE
+    st, evs = reduce(st, Action(A.SEARCH, "pg1"))
+    assert st.phase is Phase.SCONFITTA
+    assert all(c.dead for c in st.party)
 
 
 def test_non_si_gioca_a_partita_finita():

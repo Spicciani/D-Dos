@@ -27,7 +27,7 @@ from ddos.engine import actions as A
 from ddos.engine.actions import Action
 from ddos.engine.events import Event
 from ddos.engine.reduce import reduce
-from ddos.engine.state import GameState, Phase
+from ddos.engine.state import Phase
 from ddos.render.views import esc, pre, scene_view
 from ddos.store import db
 from ddos.store.repo import Repo

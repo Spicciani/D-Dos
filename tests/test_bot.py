@@ -11,10 +11,10 @@ from dataclasses import dataclass, field
 import pytest
 
 from ddos.bot import keyboards as KB
-from ddos.bot.session import GameService, TIMEOUT
+from ddos.bot.session import GameService
 from ddos.engine import actions as A
 from ddos.engine.actions import Action
-from ddos.engine.entities import ClassId, Status
+from ddos.engine.entities import Status
 from ddos.engine.state import Phase
 from ddos.store.repo import Repo
 

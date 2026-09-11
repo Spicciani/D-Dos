@@ -18,11 +18,6 @@ INNER = WIDTH - 4  # due caratteri di cornice piu' uno spazio per lato
 # Cornici CP437, quelle dei menu dei BBS.
 TL, TR, BL, BR = "╔", "╗", "╚", "╝"
 HZ, VT = "═", "║"
-TL_S, TR_S, BL_S, BR_S = "┌", "┐", "└", "┘"
-HZ_S, VT_S = "─", "│"
-SEP_L, SEP_R = "╟", "╢"
-HZ_L = "─"
-
 FULL, EMPTY = "█", "░"
 
 

@@ -35,7 +35,7 @@ ALIAS_CLASSI = {
     "chierico": ClassId.CHIERICO, "c": ClassId.CHIERICO, "chi": ClassId.CHIERICO,
 }
 
-AIUTO = f"""<b>D-DOS</b> - dungeon crawl per compagnie
+AIUTO = """<b>D-DOS</b> - dungeon crawl per compagnie
 
 <b>Per cominciare</b>
 /nuova [seme] - apri una spedizione in questo gruppo

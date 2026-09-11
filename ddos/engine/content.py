@@ -6,7 +6,7 @@ almeno una cosa che sa fare *solo lei*: e' quello che rende il party un party.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ddos.engine.entities import Ability, ClassId, Condition, Item
 

@@ -10,11 +10,11 @@ import html
 
 from ddos.engine import content as C
 from ddos.engine import rules as R
-from ddos.engine.dungeon import DIRECTION_NAMES, OPPOSITE, Level, RoomKind
+from ddos.engine.dungeon import DIRECTION_NAMES, Level, RoomKind
 from ddos.engine.entities import ABILITY_ORDER, Character, Status
 from ddos.engine.events import Event
 from ddos.engine.state import GameState, Phase
-from ddos.render.ansi import INNER, WIDTH, bar, box, clip, columns, kv, title_screen, wrap
+from ddos.render.ansi import INNER, bar, box, clip, columns, kv, title_screen, wrap
 
 #: Prefisso per tipo di evento: un log da roguelike si legge dal margine.
 PREFIX: dict[str, str] = {

@@ -17,7 +17,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from ddos.engine import actions as A
 from ddos.engine import content as C
-from ddos.engine.dungeon import DIRECTION_NAMES, RoomKind
+from ddos.engine.dungeon import RoomKind
 from ddos.engine.entities import ClassId, Status
 from ddos.engine.state import GameState, Phase
 

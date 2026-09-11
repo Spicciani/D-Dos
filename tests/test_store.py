@@ -9,7 +9,6 @@ import pytest
 from ddos.engine import actions as A
 from ddos.engine.actions import Action
 from ddos.engine.entities import ClassId
-from ddos.engine.events import ev
 from ddos.engine.reduce import reduce
 from ddos.engine.state import new_game
 from ddos.store import db

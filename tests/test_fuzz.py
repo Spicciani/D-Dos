@@ -11,7 +11,6 @@ import pytest
 from ddos.engine import actions as A
 from ddos.engine.actions import Action
 from ddos.engine.dice import Roller
-from ddos.engine.dungeon import RoomKind
 from ddos.engine.entities import ClassId, Status
 from ddos.engine.reduce import reduce
 from ddos.engine.state import GameState, Phase, new_game

@@ -74,10 +74,7 @@ class GameState:
     combat: Combat | None = None
     turn_seq: int = 0
     gold: int = 0
-    pending_loot: list[str] = field(default_factory=list)
-    fled_from: str = ""      # stanza da cui si e' appena fuggiti
     turn_mode: str = "live"  # live | lento
-    finished_at: str = ""
 
     # --- accessi comodi ----------------------------------------------------
     def roller(self) -> Roller:
@@ -100,10 +97,6 @@ class GameState:
 
     def combatant(self, entity_id: str) -> Combatant | None:
         return self.char(entity_id) or self.monster(entity_id)
-
-    @property
-    def alive_party(self) -> list[Character]:
-        return [c for c in self.party if c.alive]
 
     @property
     def standing_party(self) -> list[Character]:
@@ -144,8 +137,7 @@ class GameState:
             "prev_room_id": self.prev_room_id,
             "combat": self.combat.to_dict() if self.combat else None,
             "turn_seq": self.turn_seq, "gold": self.gold,
-            "pending_loot": list(self.pending_loot), "fled_from": self.fled_from,
-            "turn_mode": self.turn_mode, "finished_at": self.finished_at,
+            "turn_mode": self.turn_mode,
         }
 
     @classmethod
@@ -160,10 +152,7 @@ class GameState:
             prev_room_id=data.get("prev_room_id", ""),
             combat=Combat.from_dict(data["combat"]) if data.get("combat") else None,
             turn_seq=data.get("turn_seq", 0), gold=data.get("gold", 0),
-            pending_loot=list(data.get("pending_loot", [])),
-            fled_from=data.get("fled_from", ""),
             turn_mode=data.get("turn_mode", "live"),
-            finished_at=data.get("finished_at", ""),
         )
 
 

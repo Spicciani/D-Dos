@@ -249,14 +249,6 @@ def mark_private_ok(conn: sqlite3.Connection, telegram_id: int) -> None:
     conn.execute("UPDATE players SET private_ok=1 WHERE telegram_id=?", (telegram_id,))
 
 
-def has_private(conn: sqlite3.Connection, game_id: str, telegram_id: int) -> bool:
-    row = conn.execute(
-        "SELECT private_ok FROM players WHERE game_id=? AND telegram_id=?",
-        (game_id, telegram_id),
-    ).fetchone()
-    return bool(row and row["private_ok"])
-
-
 # --------------------------------------------------------------------------
 # Cronaca e cimitero
 # --------------------------------------------------------------------------

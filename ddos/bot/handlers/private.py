@@ -11,7 +11,7 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
-from ddos.render.views import esc, pre, sheet_view
+from ddos.render.views import esc, pre
 from ddos.store.repo import Repo
 
 router = Router(name="privato")

@@ -7,7 +7,7 @@ from ddos.engine.actions import Action
 from ddos.engine.dice import Roller
 from ddos.engine.entities import ClassId, Status
 from ddos.engine.reduce import reduce
-from ddos.engine.state import Phase, new_game
+from ddos.engine.state import new_game
 from ddos.render import ansi
 from ddos.render.views import (
     end_view, log_view, map_view, monsters_view, party_view, pre, room_view,

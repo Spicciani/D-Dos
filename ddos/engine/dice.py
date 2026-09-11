@@ -140,14 +140,6 @@ class Roller:
             raise ValueError("sequenza vuota")
         return seq[self.randbelow(len(seq))]
 
-    def shuffled(self, seq: Sequence[T]) -> list[T]:
-        """Fisher-Yates su una copia: l'input non viene toccato."""
-        items = list(seq)
-        for i in range(len(items) - 1, 0, -1):
-            j = self.randbelow(i + 1)
-            items[i], items[j] = items[j], items[i]
-        return items
-
     def chance(self, probability: float) -> bool:
         """True con la probabilita' data (0.0-1.0)."""
         return self.randbelow(10_000) < int(probability * 10_000)

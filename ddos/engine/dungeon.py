@@ -161,9 +161,6 @@ class Level:
     def room(self, room_id: str) -> Room:
         return self.rooms[room_id]
 
-    def neighbors(self, room_id: str) -> dict[str, Room]:
-        return {d: self.rooms[rid] for d, rid in self.rooms[room_id].exits.items()}
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "tier": self.tier,

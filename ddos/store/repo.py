@@ -127,9 +127,6 @@ class Repo:
     async def mark_private_ok(self, telegram_id: int) -> None:
         await self._call(lambda c: db.mark_private_ok(c, telegram_id))
 
-    async def has_private(self, game_id: str, telegram_id: int) -> bool:
-        return await self._call(lambda c: db.has_private(c, game_id, telegram_id))
-
     # --- cronaca e cimitero ------------------------------------------------
     async def recent_events(self, game_id: str, limit: int = 20) -> list[dict[str, Any]]:
         return await self._call(lambda c: db.recent_events(c, game_id, limit))
